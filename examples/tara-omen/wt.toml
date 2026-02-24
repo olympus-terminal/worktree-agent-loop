@@ -1,5 +1,5 @@
-# wt.toml — TARA-OMEN manuscript project
-# Real configuration for the Jubail HPC cluster at NYU Abu Dhabi
+# wt.toml — Example for a manuscript project with HPC integration
+# Modeled after a real oceanography project on an institutional cluster
 
 [project]
 name = "TARA-OMEN"
@@ -11,9 +11,9 @@ model = "opus"
 max_iterations = 20
 
 [hpc]
-host = "jubail.abudhabi.nyu.edu"
-user = "drn2"
-scratch = "/scratch/drn2/PROJECTS/TARA-LA4SR"
+host = "hpc.example.edu"
+user = "myuser"
+scratch = "/scratch/myuser/projects/tara-la4sr"
 conda_env = "tara"
 partition = "serial"
 

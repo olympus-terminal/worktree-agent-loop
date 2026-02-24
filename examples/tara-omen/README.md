@@ -15,7 +15,7 @@ Before `wt`, these ran as numbered "ralph loops" (`ralph27.sh`, `ralph28.sh`, ..
 ## Setup
 
 ```bash
-cd ~/Documents/projects/TARA-OMEN/MANUSCRIPT
+cd ~/my-manuscript
 wt init
 # Edit .wt/config.toml (or copy from examples/tara-omen/wt.toml)
 ```
@@ -63,12 +63,12 @@ Query with:
 wt hpc --worktree kan-cca
 ```
 
-## Key Data Paths (Jubail)
+## Key Data Paths
+
+Configure your HPC paths in `.wt/config.toml` under `[hpc]`. Example:
 
 | Data | Path |
 |------|------|
-| Protein FASTAs | `/scratch/drn2/PROJECTS/TARA-LA4SR/03_analyses/algae_proteins/` |
-| Pfam results | `/scratch/drn2/PROJECTS/TARA-LA4SR/03_analyses/pfam_results/` |
-| Dark proteome | `/scratch/drn2/PROJECTS/TARA-LA4SR/03_analyses/novel_domains/` |
-
-**Important**: The protein directory is `algae_proteins`, not `algal_sequences`.
+| Protein FASTAs | `/scratch/myuser/projects/tara/03_analyses/algae_proteins/` |
+| Pfam results | `/scratch/myuser/projects/tara/03_analyses/pfam_results/` |
+| Dark proteome | `/scratch/myuser/projects/tara/03_analyses/novel_domains/` |
