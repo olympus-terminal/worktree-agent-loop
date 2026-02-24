@@ -1,0 +1,19 @@
+#!/bin/bash
+#SBATCH --job-name={{NAME}}_{{JOB_NAME}}
+#SBATCH --partition={{HPC_PARTITION}}
+#SBATCH --comment={{BRANCH}}
+#SBATCH --output={{HPC_SCRATCH}}/logs/%x_%j.out
+#SBATCH --error={{HPC_SCRATCH}}/logs/%x_%j.err
+#SBATCH --time=04:00:00
+#SBATCH --mem=16G
+#SBATCH --cpus-per-task=4
+
+# ── Environment ───────────────────────────────────────────────────────
+set -euo pipefail
+
+module purge
+source activate {{HPC_CONDA}} 2>/dev/null || conda activate {{HPC_CONDA}}
+
+echo "Job: $SLURM_JOB_ID | Node: $SLURM_NODELIST | Started: $(date)"
+echo "Worktree: {{NAME}} | Branch: {{BRANCH}}"
+echo "---"

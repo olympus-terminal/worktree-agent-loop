@@ -1,0 +1,66 @@
+# wt.toml — Configuration for worktree-based multi-agent workflow
+#
+# Copy this to .wt/config.toml in your project root and edit.
+# Created by: wt init
+
+# ── Project ───────────────────────────────────────────────────────────
+[project]
+# Project name (used in logs and prompts)
+name = "my-manuscript"
+
+# Branch that worktrees branch from and merge back into
+base_branch = "main"
+
+# Where worktrees are created (relative to project root, or absolute)
+# Relative paths resolve from the project root.
+# Using a sibling directory keeps worktrees out of the main tree.
+worktree_dir = "../worktrees"
+
+# ── Agent ─────────────────────────────────────────────────────────────
+[agent]
+# Claude model for ralph loops
+# Options: opus, sonnet, haiku
+model = "opus"
+
+# Default max iterations per launch
+max_iterations = 20
+
+# Optional: restrict which tools the agent can use
+# tool_allowlist = "Bash,Read,Write,Edit,Glob,Grep"
+
+# ── HPC ───────────────────────────────────────────────────────────────
+[hpc]
+# SSH hostname of HPC cluster
+host = "cluster.example.edu"
+
+# SSH username
+user = "myuser"
+
+# Scratch/work directory on the cluster
+scratch = "/scratch/myuser"
+
+# Conda environment to activate in job scripts
+conda_env = "myenv"
+
+# Default SLURM partition
+partition = "compute"
+
+# Optional: extra SLURM directives added to generated sbatch headers
+# extra_directives = "--gres=gpu:1"
+
+# ── LaTeX ─────────────────────────────────────────────────────────────
+[latex]
+# LaTeX compiler command
+# Options: tectonic, latexmk, pdflatex
+compiler = "tectonic"
+
+# Main .tex file (relative to project root)
+main_file = "main.tex"
+
+# Regex for section-split boundaries (Python re syntax)
+# Default splits at \section, \section*, \subsection, \subsection*
+section_pattern = '\\section\*?\{.*?\}'
+
+# Files that use union merge strategy (both sides' additions survive)
+# Configured via .gitattributes, listed here for reference
+# union_merge_files = ["*.bib", "*.bbl"]

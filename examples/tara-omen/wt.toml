@@ -1,0 +1,23 @@
+# wt.toml — TARA-OMEN manuscript project
+# Real configuration for the Jubail HPC cluster at NYU Abu Dhabi
+
+[project]
+name = "TARA-OMEN"
+base_branch = "main"
+worktree_dir = "../worktrees"
+
+[agent]
+model = "opus"
+max_iterations = 20
+
+[hpc]
+host = "jubail.abudhabi.nyu.edu"
+user = "drn2"
+scratch = "/scratch/drn2/PROJECTS/TARA-LA4SR"
+conda_env = "tara"
+partition = "serial"
+
+[latex]
+compiler = "tectonic"
+main_file = "main.tex"
+section_pattern = '\\section\*?\{.*?\}'
