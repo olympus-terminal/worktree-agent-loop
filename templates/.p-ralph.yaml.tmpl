@@ -1,0 +1,67 @@
+# p-ralph config — copy to `.p-ralph.yaml` at your repo root.
+#
+# All paths are relative to the directory that contains this file, unless
+# explicitly absolute. The `p-ralph` CLI auto-discovers this file by walking
+# upward from the current directory.
+
+# -----------------------------------------------------------------------------
+# Loop identity
+# -----------------------------------------------------------------------------
+loop_id: {{LOOP_ID}}        # e.g., "myloop" — used as branch prefix and file prefix
+tag_suffix: -baseline       # baseline tag = "{loop_id}{tag_suffix}"
+branch_prefix: "{{LOOP_ID}}/task"
+
+# -----------------------------------------------------------------------------
+# State files (what the drivers merge)
+# -----------------------------------------------------------------------------
+plan_file:     "{{LOOP_ID}}_plan.md"       # JSON-in-markdown list of tasks
+activity_file: "{{LOOP_ID}}_activity.md"   # dated task-completion log
+
+# Build artifacts the verify step produces. These will be given
+# `merge=ours` so they never block merges. List anything your verify
+# command writes to the working tree.
+build_artifacts:
+  # - main.pdf
+  # - build/report.html
+
+# -----------------------------------------------------------------------------
+# Parallelism
+# -----------------------------------------------------------------------------
+# Max simultaneous worktrees. Tune to your CPU / memory / API rate limit.
+max_parallel: 4
+
+# Directory under which worktrees are created. Relative paths are
+# resolved against the repo root.
+worktree_dir: ".pralph-worktrees"
+
+# -----------------------------------------------------------------------------
+# Claude invocation
+# -----------------------------------------------------------------------------
+claude:
+  binary: claude
+  model: claude-opus-4-6
+  # Permission flags. The loop's worker prompt should already be
+  # tightly scoped; these flags control what the wrapper allows.
+  extra_flags:
+    - --dangerously-skip-permissions
+  # Allowlist for the conflict resolver (stricter than the worker).
+  resolver_allowed_tools: "Read,Edit,Write,Bash(git add:*),Bash(git commit:*),Bash(git status),Bash(git diff:*),Glob,Grep"
+
+# -----------------------------------------------------------------------------
+# Per-task verification
+# -----------------------------------------------------------------------------
+# Shell command the agent must make pass before marking its task complete.
+# Runs inside the task worktree. Non-zero exit → iteration fails.
+verify_cmd: "echo 'replace me — e.g., pytest -x, tectonic main.tex, cargo test'"
+
+# Additional verify command run in `main` after all merges land. Leave
+# empty to reuse verify_cmd.
+integrate_verify_cmd: ""
+
+# -----------------------------------------------------------------------------
+# Prompt
+# -----------------------------------------------------------------------------
+# Path to the prompt template handed to each worker iteration. The
+# template is interpolated with {{TASK_ID}}, {{TASK_DESCRIPTION}}, and
+# whatever other fields you put in plan.md.
+prompt_template: "{{LOOP_ID}}_PROMPT.md"

@@ -1,0 +1,228 @@
+#!/bin/bash
+# p-ralph loop runner.
+#
+# Reads `.p-ralph.yaml` from the repo root, executes the five phases
+# (Plan → Branch → Work → Integrate → Verify), and exits 0 when all
+# pending tasks are merged and verify passes.
+#
+# This file is installed by `p-ralph init` and is meant to be committed
+# alongside your plan file. Re-run it to resume (tasks whose `passes`
+# flag is already true are skipped).
+#
+# Required tooling: git (>= 2.25 for worktree), python3, yq or python-yaml,
+# and whatever your `verify_cmd` needs.
+
+set -uo pipefail
+
+# -----------------------------------------------------------------------------
+# 0. Load config
+# -----------------------------------------------------------------------------
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+CONFIG="${REPO_ROOT}/.p-ralph.yaml"
+if [ ! -f "$CONFIG" ]; then
+    echo "error: no .p-ralph.yaml at repo root. Run 'p-ralph init' first." >&2
+    exit 2
+fi
+
+read_cfg() {
+    python3 - "$CONFIG" "$1" <<'PYEOF'
+import sys, yaml
+with open(sys.argv[1]) as f:
+    cfg = yaml.safe_load(f)
+path = sys.argv[2].split(".")
+v = cfg
+for p in path:
+    if isinstance(v, dict):
+        v = v.get(p)
+    else:
+        v = None
+        break
+if v is None:
+    print("")
+elif isinstance(v, list):
+    print("\n".join(str(x) for x in v))
+else:
+    print(v)
+PYEOF
+}
+
+LOOP_ID=$(read_cfg loop_id)
+BRANCH_PREFIX=$(read_cfg branch_prefix)
+TAG_SUFFIX=$(read_cfg tag_suffix)
+PLAN_FILE=$(read_cfg plan_file)
+ACTIVITY_FILE=$(read_cfg activity_file)
+MAX_PARALLEL=$(read_cfg max_parallel)
+WORKTREE_DIR=$(read_cfg worktree_dir)
+VERIFY_CMD=$(read_cfg verify_cmd)
+INTEGRATE_VERIFY_CMD=$(read_cfg integrate_verify_cmd)
+PROMPT_TEMPLATE=$(read_cfg prompt_template)
+CLAUDE_BIN=$(read_cfg claude.binary)
+CLAUDE_MODEL=$(read_cfg claude.model)
+mapfile -t BUILD_ARTIFACTS < <(read_cfg build_artifacts)
+mapfile -t CLAUDE_EXTRA_FLAGS < <(read_cfg claude.extra_flags)
+
+[ -z "$INTEGRATE_VERIFY_CMD" ] && INTEGRATE_VERIFY_CMD="$VERIFY_CMD"
+
+BASELINE_TAG="${LOOP_ID}${TAG_SUFFIX}"
+LOG_DIR="${REPO_ROOT}/${LOOP_ID}_logs"
+TS=$(date '+%Y%m%d_%H%M%S')
+RUN_LOG="${LOG_DIR}/run_${TS}.log"
+mkdir -p "$LOG_DIR" "$WORKTREE_DIR"
+
+log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$RUN_LOG"; }
+
+# Find p-ralph lib dir (symlink-aware).
+PRALPH_BIN="$(command -v p-ralph || true)"
+if [ -n "$PRALPH_BIN" ]; then
+    PRALPH_LIB="$(cd "$(dirname "$(readlink -f "$PRALPH_BIN")")/../lib" && pwd)"
+else
+    echo "warning: p-ralph not on PATH; merge drivers may not resolve" >&2
+    PRALPH_LIB="${REPO_ROOT}/.pralph-lib"
+fi
+
+# -----------------------------------------------------------------------------
+# Phase A — Plan
+# -----------------------------------------------------------------------------
+log "Phase A: reading pending tasks from ${PLAN_FILE}"
+if [ ! -f "$PLAN_FILE" ]; then
+    log "error: ${PLAN_FILE} not found"
+    exit 2
+fi
+
+mapfile -t PENDING_IDS < <(python3 - "$PLAN_FILE" <<'PYEOF'
+import json, sys
+with open(sys.argv[1]) as f:
+    tasks = json.load(f)
+for t in tasks:
+    if not t.get("passes", False):
+        print(t["id"])
+PYEOF
+)
+
+if [ "${#PENDING_IDS[@]}" -eq 0 ]; then
+    log "no pending tasks — nothing to do"
+    exit 0
+fi
+log "pending tasks: ${PENDING_IDS[*]}"
+
+# -----------------------------------------------------------------------------
+# Phase B — Branch
+# -----------------------------------------------------------------------------
+log "Phase B: baselining and creating worktrees"
+if ! git rev-parse -q --verify "refs/tags/${BASELINE_TAG}" >/dev/null; then
+    git tag "$BASELINE_TAG" HEAD
+    log "created baseline tag ${BASELINE_TAG}"
+fi
+
+for tid in "${PENDING_IDS[@]}"; do
+    branch="${BRANCH_PREFIX}${tid}"
+    wt="${WORKTREE_DIR}/task${tid}"
+    if git rev-parse -q --verify "$branch" >/dev/null; then
+        log "  branch ${branch} exists; reusing"
+    else
+        git branch "$branch" "$BASELINE_TAG"
+    fi
+    if [ ! -d "$wt" ]; then
+        git worktree add "$wt" "$branch" >/dev/null 2>&1
+    fi
+done
+
+# -----------------------------------------------------------------------------
+# Phase C — Work (parallel)
+# -----------------------------------------------------------------------------
+log "Phase C: spawning up to ${MAX_PARALLEL} parallel workers"
+
+run_worker() {
+    local tid="$1"
+    local wt="${WORKTREE_DIR}/task${tid}"
+    local log="${LOG_DIR}/task${tid}_${TS}.log"
+    (
+        cd "$wt"
+        # Render prompt — simple {{TASK_ID}} substitution.
+        local prompt
+        prompt=$(sed "s/{{TASK_ID}}/${tid}/g" "${REPO_ROOT}/${PROMPT_TEMPLATE}")
+        local flags=""
+        for f in "${CLAUDE_EXTRA_FLAGS[@]}"; do flags="$flags $f"; done
+        "$CLAUDE_BIN" --model "$CLAUDE_MODEL" $flags -p "$prompt" --output-format text
+    ) >"$log" 2>&1
+    local rc=$?
+    echo "[worker ${tid}] exit ${rc}"
+}
+
+export -f run_worker
+export REPO_ROOT WORKTREE_DIR LOG_DIR TS PROMPT_TEMPLATE CLAUDE_BIN CLAUDE_MODEL
+export CLAUDE_EXTRA_FLAGS
+
+printf "%s\n" "${PENDING_IDS[@]}" | \
+    xargs -n1 -P"$MAX_PARALLEL" -I{} bash -c 'run_worker "$@"' _ {} \
+    | tee -a "$RUN_LOG"
+
+# -----------------------------------------------------------------------------
+# Phase D — Integrate
+# -----------------------------------------------------------------------------
+log "Phase D: installing merge drivers and merging task branches"
+
+# Stash anything dirty in main — build artifacts or user edits.
+if ! git diff --quiet HEAD; then
+    git stash push -u -m "p-ralph integrate stash ${TS}" >>"$RUN_LOG" 2>&1 || true
+fi
+
+# Install merge drivers. Artifacts are passed as `merge=ours` paths.
+bash "${PRALPH_LIB}/install_merge_drivers.sh" \
+    "$PLAN_FILE" "$ACTIVITY_FILE" "${BUILD_ARTIFACTS[@]}" >>"$RUN_LOG" 2>&1
+
+CONFLICTED=()
+for tid in "${PENDING_IDS[@]}"; do
+    branch="${BRANCH_PREFIX}${tid}"
+    if [ "$(git rev-list --count "main..${branch}")" -eq 0 ]; then
+        log "  task ${tid}: branch has no new commits, skipping"
+        continue
+    fi
+    log "  task ${tid}: merging ${branch}"
+    if git merge --no-ff --no-edit -m "p-ralph: merge task ${tid}" "$branch" \
+            >>"$RUN_LOG" 2>&1; then
+        log "    ok"
+    else
+        if git diff --name-only --diff-filter=U | grep -q .; then
+            log "    conflict — handing to resolver"
+            CONFLICTED+=("$tid")
+            # Leave the merge unresolved for the resolver phase.
+            git merge --abort >>"$RUN_LOG" 2>&1 || true
+        else
+            log "    merge failed with no unmerged paths; aborting"
+            git merge --abort >>"$RUN_LOG" 2>&1 || true
+        fi
+    fi
+done
+
+# Resolver pass for conflicts.
+for tid in "${CONFLICTED[@]}"; do
+    branch="${BRANCH_PREFIX}${tid}"
+    log "  resolver: re-attempting task ${tid}"
+    git merge --no-ff --no-edit -m "p-ralph: merge task ${tid}" "$branch" \
+        >>"$RUN_LOG" 2>&1 || true
+    if [ -f .git/MERGE_HEAD ]; then
+        bash "${PRALPH_LIB}/resolve_with_claude.sh" "$tid" "$CONFIG" \
+            >>"$RUN_LOG" 2>&1 || true
+    fi
+    if [ -f .git/MERGE_HEAD ]; then
+        log "    resolver FAILED on task ${tid}; aborting this merge"
+        git merge --abort >>"$RUN_LOG" 2>&1 || true
+    else
+        log "    resolver OK"
+    fi
+done
+
+# -----------------------------------------------------------------------------
+# Phase E — Verify
+# -----------------------------------------------------------------------------
+log "Phase E: running integrate verify: ${INTEGRATE_VERIFY_CMD}"
+if bash -c "$INTEGRATE_VERIFY_CMD" >>"$RUN_LOG" 2>&1; then
+    log "verify OK"
+    exit 0
+else
+    log "verify FAILED — see ${RUN_LOG}"
+    exit 1
+fi

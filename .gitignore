@@ -1,0 +1,13 @@
+*.pyc
+__pycache__/
+.DS_Store
+.idea/
+.vscode/
+
+# Test scratch
+/tmp_test/
+
+# Runtime state a consumer repo would create
+.pralph-worktrees/
+.pralph-lib
+*_logs/

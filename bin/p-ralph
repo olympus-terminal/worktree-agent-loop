@@ -1,0 +1,210 @@
+#!/bin/bash
+# p-ralph — parallel-worktree Ralph loops for Claude agents.
+#
+# Subcommands:
+#   init <loop_id>   scaffold .p-ralph.yaml, <loop_id>_plan.md, <loop_id>_loop.sh
+#   plan             show pending/complete task counts
+#   build            run the full loop (Plan → Branch → Work → Integrate → Verify)
+#   status           show per-task branch + merge status
+#   revert <task_id> revert one task's merge commit, keep the rest
+#   reset            delete the baseline tag + all task branches/worktrees
+#
+# The CLI is thin glue. The real work lives in templates/loop.sh.tmpl
+# (installed per-repo by `init`) and lib/ (shared install tree).
+
+set -euo pipefail
+
+PRALPH_BIN="${BASH_SOURCE[0]}"
+PRALPH_ROOT="$(cd "$(dirname "$(readlink -f "$PRALPH_BIN")")/.." && pwd)"
+PRALPH_LIB="${PRALPH_ROOT}/lib"
+PRALPH_TEMPLATES="${PRALPH_ROOT}/templates"
+
+usage() {
+    cat <<'EOF'
+p-ralph — parallel-worktree Ralph loops.
+
+Usage:
+  p-ralph init <loop_id>
+  p-ralph plan
+  p-ralph build
+  p-ralph status
+  p-ralph revert <task_id>
+  p-ralph reset
+
+Run inside a git repository. `init` scaffolds config; the rest read
+`.p-ralph.yaml` at the repo root.
+EOF
+}
+
+require_repo() {
+    if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+        echo "error: not inside a git repository" >&2
+        exit 2
+    fi
+}
+
+require_config() {
+    REPO_ROOT="$(git rev-parse --show-toplevel)"
+    if [ ! -f "${REPO_ROOT}/.p-ralph.yaml" ]; then
+        echo "error: no .p-ralph.yaml at ${REPO_ROOT}; run 'p-ralph init <loop_id>' first" >&2
+        exit 2
+    fi
+}
+
+read_cfg() {
+    python3 - "${REPO_ROOT}/.p-ralph.yaml" "$1" <<'PYEOF'
+import sys, yaml
+with open(sys.argv[1]) as f:
+    cfg = yaml.safe_load(f)
+v = cfg
+for p in sys.argv[2].split("."):
+    v = v.get(p) if isinstance(v, dict) else None
+    if v is None: break
+print(v or "")
+PYEOF
+}
+
+cmd_init() {
+    if [ "$#" -lt 1 ]; then echo "usage: p-ralph init <loop_id>" >&2; exit 2; fi
+    require_repo
+    REPO_ROOT="$(git rev-parse --show-toplevel)"
+    LOOP_ID="$1"
+
+    if [ -f "${REPO_ROOT}/.p-ralph.yaml" ]; then
+        echo "error: .p-ralph.yaml already exists; refusing to overwrite" >&2
+        exit 2
+    fi
+
+    sed "s/{{LOOP_ID}}/${LOOP_ID}/g" \
+        "${PRALPH_TEMPLATES}/.p-ralph.yaml.tmpl" > "${REPO_ROOT}/.p-ralph.yaml"
+    cp "${PRALPH_TEMPLATES}/loop.sh.tmpl" "${REPO_ROOT}/${LOOP_ID}_loop.sh"
+    chmod +x "${REPO_ROOT}/${LOOP_ID}_loop.sh"
+
+    if [ ! -f "${REPO_ROOT}/${LOOP_ID}_plan.md" ]; then
+        cat > "${REPO_ROOT}/${LOOP_ID}_plan.md" <<PLANEOF
+[
+  {
+    "id": 1,
+    "description": "Describe the first task here.",
+    "passes": false
+  }
+]
+PLANEOF
+    fi
+
+    if [ ! -f "${REPO_ROOT}/${LOOP_ID}_activity.md" ]; then
+        cat > "${REPO_ROOT}/${LOOP_ID}_activity.md" <<ACTEOF
+# ${LOOP_ID} activity log
+
+## Iteration log
+ACTEOF
+    fi
+
+    echo "[p-ralph] initialized loop '${LOOP_ID}':"
+    echo "  ${REPO_ROOT}/.p-ralph.yaml"
+    echo "  ${REPO_ROOT}/${LOOP_ID}_plan.md"
+    echo "  ${REPO_ROOT}/${LOOP_ID}_activity.md"
+    echo "  ${REPO_ROOT}/${LOOP_ID}_loop.sh"
+    echo ""
+    echo "Next: edit .p-ralph.yaml (verify_cmd, prompt_template, build_artifacts),"
+    echo "fill in the plan, then run: p-ralph build"
+}
+
+cmd_plan() {
+    require_repo; require_config
+    PLAN_FILE="$(read_cfg plan_file)"
+    python3 - "${REPO_ROOT}/${PLAN_FILE}" <<'PYEOF'
+import json, sys
+with open(sys.argv[1]) as f:
+    tasks = json.load(f)
+done = sum(1 for t in tasks if t.get("passes"))
+total = len(tasks)
+print(f"{done}/{total} tasks complete")
+for t in tasks:
+    mark = "✓" if t.get("passes") else " "
+    print(f"  [{mark}] {t['id']}: {t.get('description','')[:80]}")
+PYEOF
+}
+
+cmd_build() {
+    require_repo; require_config
+    LOOP_ID=$(read_cfg loop_id)
+    SCRIPT="${REPO_ROOT}/${LOOP_ID}_loop.sh"
+    if [ ! -x "$SCRIPT" ]; then
+        echo "error: ${SCRIPT} missing or not executable" >&2
+        exit 2
+    fi
+    # Make the lib dir discoverable by the loop script.
+    ln -sfn "$PRALPH_LIB" "${REPO_ROOT}/.pralph-lib"
+    bash "$SCRIPT"
+}
+
+cmd_status() {
+    require_repo; require_config
+    LOOP_ID=$(read_cfg loop_id)
+    BRANCH_PREFIX=$(read_cfg branch_prefix)
+    TAG_SUFFIX=$(read_cfg tag_suffix)
+    BASELINE="${LOOP_ID}${TAG_SUFFIX}"
+
+    echo "loop:     ${LOOP_ID}"
+    echo "baseline: ${BASELINE}"
+    echo ""
+    echo "branches:"
+    git branch --list "${BRANCH_PREFIX}*" | while read -r line; do
+        b=$(echo "$line" | sed 's/^[* ] //')
+        [ -z "$b" ] && continue
+        ahead=$(git rev-list --count "main..${b}" 2>/dev/null || echo "?")
+        merged=$(git branch --merged main | grep -q " ${b}$" && echo "merged" || echo "unmerged")
+        printf "  %-40s  %s ahead of main, %s\n" "$b" "$ahead" "$merged"
+    done
+    echo ""
+    cmd_plan
+}
+
+cmd_revert() {
+    if [ "$#" -lt 1 ]; then echo "usage: p-ralph revert <task_id>" >&2; exit 2; fi
+    require_repo; require_config
+    TID="$1"
+    BRANCH_PREFIX=$(read_cfg branch_prefix)
+    branch="${BRANCH_PREFIX}${TID}"
+    sha=$(git log --merges --format=%H --grep="merge task ${TID}" -1 || true)
+    if [ -z "$sha" ]; then
+        echo "error: no merge commit found for task ${TID}" >&2
+        exit 2
+    fi
+    echo "reverting merge commit ${sha} for ${branch}"
+    git revert -m 1 "$sha"
+}
+
+cmd_reset() {
+    require_repo; require_config
+    LOOP_ID=$(read_cfg loop_id)
+    BRANCH_PREFIX=$(read_cfg branch_prefix)
+    TAG_SUFFIX=$(read_cfg tag_suffix)
+    WORKTREE_DIR=$(read_cfg worktree_dir)
+
+    echo "This will delete:"
+    echo "  - baseline tag: ${LOOP_ID}${TAG_SUFFIX}"
+    echo "  - all branches matching: ${BRANCH_PREFIX}*"
+    echo "  - all worktrees under: ${WORKTREE_DIR}/"
+    echo ""
+    read -r -p "proceed? (yes/NO) " ans
+    [ "$ans" = "yes" ] || { echo "aborted"; exit 0; }
+
+    git branch --list "${BRANCH_PREFIX}*" | sed 's/^[* ] //' | xargs -r -n1 git branch -D
+    git tag -d "${LOOP_ID}${TAG_SUFFIX}" 2>/dev/null || true
+    rm -rf "${REPO_ROOT}/${WORKTREE_DIR}"
+    git worktree prune
+    echo "reset complete"
+}
+
+case "${1:-}" in
+    init)    shift; cmd_init "$@" ;;
+    plan)    shift; cmd_plan "$@" ;;
+    build)   shift; cmd_build "$@" ;;
+    status)  shift; cmd_status "$@" ;;
+    revert)  shift; cmd_revert "$@" ;;
+    reset)   shift; cmd_reset "$@" ;;
+    -h|--help|help|"") usage ;;
+    *) echo "unknown command: $1" >&2; usage; exit 2 ;;
+esac

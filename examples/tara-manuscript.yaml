@@ -1,0 +1,29 @@
+# Example .p-ralph.yaml — the config that would have driven the ralph43
+# run that p-ralph was distilled from. Included as a realistic end-to-end
+# example, not a template you should copy blindly.
+
+loop_id: ralph43
+tag_suffix: -baseline
+branch_prefix: "ralph43/task"
+
+plan_file:     "ralph43_plan.md"
+activity_file: "ralph43_activity.md"
+
+build_artifacts:
+  - main.pdf
+  - supplemental_information.pdf
+
+max_parallel: 6
+worktree_dir: ".pralph-worktrees"
+
+claude:
+  binary: claude
+  model: claude-opus-4-6
+  extra_flags:
+    - --dangerously-skip-permissions
+  resolver_allowed_tools: "Read,Edit,Write,Bash(tectonic:*),Bash(git add:*),Bash(git commit:*),Bash(git status),Bash(git diff:*),Bash(ls:*),Glob,Grep"
+
+verify_cmd: "tectonic main.tex && tectonic supplemental_information.tex"
+integrate_verify_cmd: "tectonic main.tex"
+
+prompt_template: "ralph43_PROMPT.md"
