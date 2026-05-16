@@ -121,7 +121,7 @@ A JSON array where each task has:
 
 **Why custom merge drivers?** The plan file and activity log are edited by every agent. Without merge drivers, every merge would conflict on these files. The plan driver OR-merges `passes` flags; the activity driver unions dated entries. Zero manual resolution needed for state files.
 
-**Why a conflict resolver?** When two writing tasks edit the same paragraph of `main.tex`, git can't auto-merge. The resolver invokes Claude with a narrow prompt: "keep both contributions, remove conflict markers, compile." This handles 90%+ of real conflicts without human intervention.
+**Why a conflict resolver?** When two agents edit overlapping regions of the same file, git can't auto-merge. The resolver invokes Claude with a narrow prompt: "keep both contributions, remove conflict markers, verify the result." This handles most real conflicts without human intervention.
 
 ## Revertability
 
@@ -156,10 +156,6 @@ bash ralph.sh continue  config.sh    # Skip preflight, run rest
 - Git 2.15+ (worktree support)
 - Python 3.6+ (plan/activity file manipulation)
 - Bash 4+ (associative arrays)
-
-## Origin
-
-Developed during the writing of an ocean metagenomics manuscript analyzing 221.9 million algal protein sequences across 2,357 samples. 44 RALPH iterations handled everything from initial data audits through peer reviewer responses, each loop running 4-11 parallel agents editing LaTeX, running Python analyses, and merging results — with zero data loss across ~200 parallel agent invocations.
 
 ## License
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ======================================================================
-# RALPH — Recursive Autonomous Loop for Parallel Headless agents
+# ralph.sh — parallel Claude Code agents in isolated git worktrees
 #
 # A framework for running parallel Claude Code agents in isolated git
 # worktrees, each executing one task from a JSON plan, then merging
