@@ -4,8 +4,6 @@
 
 A framework for running parallel [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents in isolated git worktrees, each executing one task from a JSON plan, then merging results back into the main branch with full revertability.
 
-Born from 44 iterations of autonomous manuscript editing on a marine metagenomics paper (internally called "RALPH" — Recursive Autonomous Loop for Parallel Headless agents). Battle-tested across ~200 parallel agent invocations with zero data loss.
-
 ## How it works
 
 ```
