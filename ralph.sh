@@ -71,6 +71,13 @@ VERIFY_COMMANDS="${VERIFY_COMMANDS:-}"
 # Context files to inject into task prompts (space-separated paths)
 CONTEXT_FILES="${CONTEXT_FILES:-}"
 
+# Extra files to copy into each worktree (space-separated, relative to PROJECT_DIR)
+# Use for untracked files the agent needs (PRD, reference data, etc.)
+EXTRA_COPY_FILES="${EXTRA_COPY_FILES:-}"
+
+# Extra directories to create in each worktree (space-separated, relative)
+EXTRA_MKDIRS="${EXTRA_MKDIRS:-}"
+
 # ======================================================================
 # Load mission config if provided
 # ======================================================================
@@ -251,6 +258,18 @@ setup_task_worktree() {
     cp "${PROJECT_DIR}/${PLAN_FILE}"     "${wt}/${PLAN_FILE}"
     cp "${PROJECT_DIR}/${ACTIVITY_FILE}" "${wt}/${ACTIVITY_FILE}"
     cp "${PROJECT_DIR}/${PROMPT_FILE}"   "${wt}/${PROMPT_FILE}"
+
+    # Copy extra files (PRD, reference data, etc.)
+    for extra in ${EXTRA_COPY_FILES}; do
+        if [ -f "${PROJECT_DIR}/${extra}" ]; then
+            cp "${PROJECT_DIR}/${extra}" "${wt}/${extra}"
+        fi
+    done
+
+    # Create extra directories
+    for d in ${EXTRA_MKDIRS}; do
+        mkdir -p "${wt}/${d}"
+    done
 
     # Build the task-scoped prompt
     local task_prompt="${wt}/${LOOP_NAME}_TASK_PROMPT.md"

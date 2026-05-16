@@ -78,6 +78,8 @@ AGENT_MODEL="claude-opus-4-6"         # Claude model
 ALLOWED_TOOLS="Read,Edit,Write,..."   # Tool allowlist
 CONTEXT_FILES="/path/to/CLAUDE.md"    # @-referenced in task prompts
 VERIFY_COMMANDS="make test"           # Phase E verification (one per line)
+EXTRA_COPY_FILES="myloop_PRD.md"      # Untracked files to copy into worktrees
+EXTRA_MKDIRS="source_data/myloop"     # Directories to create in each worktree
 
 # Optional: custom task prompt body
 ralph_task_prompt_body() {
