@@ -1,0 +1,23 @@
+# wt.toml — Example for a manuscript project with HPC integration
+# Modeled after a real oceanography project on an institutional cluster
+
+[project]
+name = "TARA-OMEN"
+base_branch = "main"
+worktree_dir = "../worktrees"
+
+[agent]
+model = "opus"
+max_iterations = 20
+
+[hpc]
+host = "hpc.example.edu"
+user = "myuser"
+scratch = "/scratch/myuser/projects/tara-la4sr"
+conda_env = "tara"
+partition = "serial"
+
+[latex]
+compiler = "tectonic"
+main_file = "main.tex"
+section_pattern = '\\section\*?\{.*?\}'

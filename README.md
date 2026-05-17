@@ -1,163 +1,156 @@
-# worktree-agent-loop
+# wt — Git Worktree Orchestration for Multi-Agent Projects
 
-**Parallel AI agents in isolated git worktrees**
+A toolkit for running multiple Claude Code agents in parallel on research manuscripts, each in its own git worktree. Born from the TARA-OMEN project's battle-tested "ralph loop" pattern.
 
-A framework for running parallel [Claude Code](https://docs.anthropic.com/en/docs/claude-code) agents in isolated git worktrees, each executing one task from a JSON plan, then merging results back into the main branch with full revertability.
+## Why
 
-## How it works
+When multiple AI agents work on the same manuscript simultaneously, they collide: overwriting each other's edits, re-reading files defensively, and fighting over shared state. Git worktrees solve this by giving each agent its own copy of the repository on its own branch.
 
-```
-Phase A (sequential)     Preflight checks, baseline git tag
-         │
-Phase B (parallel)       Analysis tasks in isolated worktrees
-         │                 ┌─ worktree/task1 ─── claude agent ─── commit
-         │                 ├─ worktree/task2 ─── claude agent ─── commit
-         │                 └─ worktree/task3 ─── claude agent ─── commit
-         │
-Phase C (parallel)       Writing tasks in isolated worktrees
-         │                 ┌─ worktree/task4 ─── claude agent ─── commit
-         │                 └─ worktree/task5 ─── claude agent ─── commit
-         │
-Phase D (sequential)     Merge branches into main (--no-ff)
-         │                 Auto-resolve conflicts via Claude
-         │
-Phase E (sequential)     Verification (compile, test, audit)
-```
+See [docs/philosophy.md](docs/philosophy.md) for the full rationale.
 
-Each task gets its own git branch and worktree. Agents run in parallel without interfering with each other. Merges are `--no-ff` so any task can be reverted with `git revert <merge-sha>`.
-
-## Quick start
+## Install
 
 ```bash
-# 1. Clone into your project
-cp ralph.sh ralph_merge_drivers.sh ralph_resolve_conflicts.sh /path/to/project/
-
-# 2. Create your mission files
-#    - myloop_plan.md      (JSON task array)
-#    - myloop_PROMPT.md    (agent instructions)
-#    - myloop_activity.md  (empty progress log)
-#    - myloop_config.sh    (mission configuration)
-
-# 3. Run
-cd /path/to/project
-bash ralph.sh all myloop_config.sh
+git clone <repo-url> ~/worktrees
+echo 'export PATH="$HOME/worktrees/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-## File structure
+**Requirements**: bash, git, python3 (stdlib only). No external dependencies.
 
-```
-ralph.sh                      # The engine (reusable across projects)
-ralph_merge_drivers.sh        # Git merge drivers for plan/activity files
-ralph_resolve_conflicts.sh    # Auto-resolve merge conflicts via Claude
-examples/
-  manuscript_review_config.sh # Full config for scientific manuscript editing
-  minimal_config.sh           # Simplest possible config
-  example_plan.md             # Example JSON plan file
-```
-
-## Mission config
-
-The config file is a bash script that exports variables consumed by `ralph.sh`:
+## Quickstart
 
 ```bash
-# Required
-LOOP_NAME="myloop"                    # Names files, branches, tags, logs
-PROJECT_DIR="/path/to/project"        # Git repo root
-ANALYSIS_TASKS_STR="1 2 3"            # Task IDs for Phase B (parallel)
-WRITING_TASKS_STR="4 5"               # Task IDs for Phase C (parallel)
+# 1. Initialize your project
+cd ~/my-manuscript
+wt init
+# Edit .wt/config.toml with your settings
 
-# Required files (must exist in PROJECT_DIR)
-PLAN_FILE="myloop_plan.md"            # JSON task array
-ACTIVITY_FILE="myloop_activity.md"    # Progress log
-PROMPT_FILE="myloop_PROMPT.md"        # Agent instructions
+# 2. Create worktrees for parallel tasks
+wt create kan-cca --from main
+wt create figures --from main
 
-# Optional
-REVIEW_FILE="reviews.txt"             # Reference doc injected into prompts
-WORKER_ITER=3                         # Retry budget per task
-AGENT_MODEL="claude-opus-4-6"         # Claude model
-ALLOWED_TOOLS="Read,Edit,Write,..."   # Tool allowlist
-CONTEXT_FILES="/path/to/CLAUDE.md"    # @-referenced in task prompts
-VERIFY_COMMANDS="make test"           # Phase E verification (one per line)
-EXTRA_COPY_FILES="myloop_PRD.md"      # Untracked files to copy into worktrees
-EXTRA_MKDIRS="source_data/myloop"     # Directories to create in each worktree
+# 3. Edit the task plans
+vim ../worktrees/kan-cca/ralph_kan-cca_plan.md
+vim ../worktrees/figures/ralph_figures_plan.md
 
-# Optional: custom task prompt body
-ralph_task_prompt_body() {
-    local task_id="$1" wt="$2" branch="$3"
-    cat <<EOF
-    # Your custom per-task instructions here
-EOF
-}
+# 4. Launch agents
+wt launch kan-cca --bg
+wt launch figures --bg
+
+# 5. Monitor progress
+wt status
+
+# 6. Merge completed work back
+wt merge kan-cca
+wt merge figures
+
+# 7. Clean up
+wt destroy kan-cca --delete-branch
+wt destroy figures --delete-branch
 ```
 
-## Plan file format
+## Commands
 
-A JSON array where each task has:
+| Command | Description |
+|---------|-------------|
+| `wt init` | Initialize repo for worktree workflow |
+| `wt create <name>` | Create worktree + branch + agent scaffold |
+| `wt launch <name>` | Run ralph loop in worktree |
+| `wt status` | Dashboard of all worktrees |
+| `wt merge <name>` | Merge branch back (LaTeX-aware) |
+| `wt destroy <name>` | Remove worktree |
+| `wt hpc` | Query HPC jobs tagged to worktrees |
 
-```json
-[
-  {
-    "id": 1,
-    "category": "analysis",
-    "priority": 1,
-    "passes": false,
-    "reviewer_concern": "R1#2 (description of the concern)",
-    "description": "What the agent should do. Be specific: name scripts to create, files to edit, values to compute, commit messages to use."
-  }
-]
+Run `wt <command> --help` for detailed options.
+
+## How It Works
+
+### Worktree Lifecycle
+
+```
+create → launch → (iterate) → merge → destroy
 ```
 
-- `id`: Unique integer. Becomes the branch name (`myloop/task1`).
-- `category`: `"analysis"` or `"writing"`. Determines which phase runs it.
-- `priority`: Lower = higher priority (used when agents pick tasks sequentially).
-- `passes`: Set to `true` by the agent when the task is complete.
-- `description`: The full task specification. This is what the agent reads.
+1. **Create** — `git worktree add` + scaffold ralph loop files
+2. **Launch** — Run the ralph loop (Claude CLI in a loop, one task per iteration)
+3. **Merge** — `git merge --no-ff` with LaTeX section-split on conflicts
+4. **Destroy** — `git worktree remove` + optional branch deletion
 
-## Key design decisions
+### Ralph Loop
 
-**Why worktrees?** Git worktrees give each agent a fully isolated copy of the repo. No file locking, no race conditions, no partial writes. Each agent commits to its own branch. The merge step is where conflicts surface, and they're handled systematically.
+Each worktree contains a self-contained ralph loop:
 
-**Why `--no-ff` merges?** Every task produces a merge commit on main. `git revert <merge-sha>` cleanly undoes exactly one task without touching others. Full revertability at task granularity.
+```
+worktree/
+├── ralph_<name>.sh          # Loop script (runs Claude iteratively)
+├── ralph_<name>_PROMPT.md   # What the agent sees each iteration
+├── ralph_<name>_plan.md     # JSON task list with "passes": true/false
+├── ralph_<name>_activity.md # Timestamped log of what happened
+└── CLAUDE.md                # Worktree-specific instructions
+```
 
-**Why analysis before writing?** Analysis tasks produce data files (scripts, computed statistics). Writing tasks consume those data files to edit prose. Running analysis first ensures writing tasks have real numbers to work with.
+The loop runs Claude, which reads the plan, executes one task, marks it done, and commits. Repeat until all tasks pass.
 
-**Why custom merge drivers?** The plan file and activity log are edited by every agent. Without merge drivers, every merge would conflict on these files. The plan driver OR-merges `passes` flags; the activity driver unions dated entries. Zero manual resolution needed for state files.
+### LaTeX Merge Strategy
 
-**Why a conflict resolver?** When two agents edit overlapping regions of the same file, git can't auto-merge. The resolver invokes Claude with a narrow prompt: "keep both contributions, remove conflict markers, verify the result." This handles most real conflicts without human intervention.
+When merging produces conflicts in `.tex` files:
 
-## Revertability
+1. Split at `\section{}` boundaries
+2. Three-way merge per section
+3. Generate a human-readable conflict report
+4. `.bib` files use union merge (both sides' refs survive)
+
+See [docs/latex-merging.md](docs/latex-merging.md).
+
+### HPC Integration
+
+Tag SLURM jobs with `--comment=wt/<name>` for tracking:
 
 ```bash
-# Full rollback to pre-loop state
-git reset --hard myloop-baseline
-
-# Revert one task only
-git log --oneline --merges | grep "task 3"
-git revert <merge-sha>
-
-# See what each task changed
-git diff myloop-baseline..myloop/task3
+#SBATCH --comment=wt/kan-cca
 ```
 
-## Phase control
+Query with `wt hpc --worktree kan-cca`. See [docs/hpc-integration.md](docs/hpc-integration.md).
 
-Run individual phases for debugging or recovery:
+## Configuration
 
-```bash
-bash ralph.sh preflight config.sh    # Just check files + tag
-bash ralph.sh analysis  config.sh    # Run analysis tasks only
-bash ralph.sh writing   config.sh    # Run writing tasks only
-bash ralph.sh integrate config.sh    # Merge branches only
-bash ralph.sh verify    config.sh    # Compile + status report
-bash ralph.sh continue  config.sh    # Skip preflight, run rest
+`wt init` creates `.wt/config.toml`:
+
+```toml
+[project]
+name = "my-manuscript"
+base_branch = "main"
+worktree_dir = "../worktrees"
+
+[agent]
+model = "opus"
+max_iterations = 20
+
+[hpc]
+host = "cluster.example.edu"
+user = "myuser"
+scratch = "/scratch/myuser"
+
+[latex]
+compiler = "tectonic"
+main_file = "main.tex"
 ```
 
-## Requirements
+See [config/wt.toml.example](config/wt.toml.example) for all options.
 
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude` command available)
-- Git 2.15+ (worktree support)
-- Python 3.6+ (plan/activity file manipulation)
-- Bash 4+ (associative arrays)
+## Migration
+
+Coming from numbered ralph loops (`ralph27.sh`, `ralph28.sh`, ...)? See [docs/migration.md](docs/migration.md).
+
+## Design Decisions
+
+- **Generic first** — templates use `{{VARIABLE}}` placeholders; project-specific details live in config
+- **Name-based worktrees** — `wt/kan-cca` not `ralph32`; names describe purpose
+- **No daemon, no database** — all state in git + markdown files
+- **Bash CLI, Python merge tools** — bash for git/ssh, Python for LaTeX parsing (stdlib only)
+- **SLURM `--comment` for job tagging** — zero infrastructure, works on any cluster
+- **Zero external dependencies** — bash + git + python3 stdlib
 
 ## License
 

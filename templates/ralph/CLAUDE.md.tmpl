@@ -1,0 +1,46 @@
+# Claude Instructions — Worktree {{NAME}}
+
+## Worktree Context
+
+You are working in an **isolated git worktree**.
+
+- **Worktree**: {{NAME}}
+- **Branch**: {{BRANCH}} (from {{BASE_BRANCH}})
+- **Project**: {{PROJECT}}
+
+## Isolation Guarantee
+
+You are the ONLY agent editing files in this worktree. This means:
+- You may freely use Write or Edit on any file
+- No need to re-read files before editing (no concurrent editors)
+- No risk of overwriting another agent's work
+
+## What NOT To Do
+
+- Do NOT push to remote
+- Do NOT merge or rebase branches
+- Do NOT edit files outside this worktree
+- Do NOT create new git repositories
+
+## Data Integrity
+
+This is a methods paper. All claims must be verifiable.
+
+- DO NOT fabricate or estimate numerical values
+- DO NOT use placeholder numbers
+- READ source files before writing any statistic
+- DOCUMENT provenance for all data
+
+## Compilation
+
+```bash
+{{COMPILER}} {{MAIN_FILE}}
+```
+
+## HPC
+
+{{#HPC_HOST}}
+- SSH: {{HPC_USER}}@{{HPC_HOST}}
+- Scratch: {{HPC_SCRATCH}}
+- Tag SLURM jobs with: `--comment={{BRANCH}}`
+{{/HPC_HOST}}

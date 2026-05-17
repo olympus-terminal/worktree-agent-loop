@@ -1,0 +1,16 @@
+# Worktree runtime state
+.wt/pids/
+.wt/logs/
+
+# Editor swap files
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc

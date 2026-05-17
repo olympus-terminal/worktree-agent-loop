@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# wt — Git worktree orchestration for multi-agent manuscript projects
+# Usage: wt <command> [args...]
+
+set -euo pipefail
+
+# Resolve install directory
+WT_INSTALL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+export WT_INSTALL_DIR
+
+# shellcheck source=../lib/common.sh
+source "$WT_INSTALL_DIR/lib/common.sh"
+
+VERSION="0.1.0"
+
+wt_usage() {
+    cat <<EOF
+${BOLD}wt${RESET} — Git worktree orchestration for multi-agent projects  ${DIM}v${VERSION}${RESET}
+
+${BOLD}USAGE${RESET}
+    wt <command> [options]
+
+${BOLD}COMMANDS${RESET}
+    ${GREEN}init${RESET}                Initialize current repo for wt workflow
+    ${GREEN}create${RESET} <name>       Create worktree with agent scaffold
+    ${GREEN}launch${RESET} <name>       Launch ralph loop in worktree
+    ${GREEN}status${RESET}              Dashboard of all worktrees
+    ${GREEN}merge${RESET}  <name>       Merge worktree branch back (LaTeX-aware)
+    ${GREEN}destroy${RESET} <name>      Remove worktree and optionally delete branch
+    ${GREEN}hpc${RESET}                 Query HPC jobs tagged to worktrees
+
+${BOLD}OPTIONS${RESET}
+    -h, --help          Show this help
+    -v, --version       Show version
+
+${BOLD}QUICKSTART${RESET}
+    wt init
+    wt create kan-cca --from main
+    wt launch kan-cca 10
+    wt status
+    wt merge kan-cca
+    wt destroy kan-cca
+
+See ${CYAN}wt <command> --help${RESET} for command-specific options.
+EOF
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+    init|create|launch|status|merge|destroy|hpc)
+        lib_file="$WT_INSTALL_DIR/lib/wt-${cmd}.sh"
+        if [[ ! -f "$lib_file" ]]; then
+            wt_die "Command file not found: $lib_file"
+        fi
+        source "$lib_file"
+        "wt_${cmd}" "$@"
+        ;;
+    -h|--help|help|"")
+        wt_usage
+        ;;
+    -v|--version|version)
+        echo "wt $VERSION"
+        ;;
+    *)
+        wt_error "Unknown command: $cmd"
+        echo
+        wt_usage
+        exit 1
+        ;;
+esac

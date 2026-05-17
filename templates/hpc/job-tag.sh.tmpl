@@ -1,0 +1,10 @@
+# Add to any sbatch script to tag it for worktree tracking.
+# Usage: source this file or copy the SBATCH line into your script.
+
+#SBATCH --comment={{BRANCH}}
+
+# Query your worktree's jobs:
+#   squeue -u $USER --format='%.10i %.25j %.8T %.12M' | grep {{NAME}}
+#
+# Or use wt:
+#   wt hpc --worktree {{NAME}}

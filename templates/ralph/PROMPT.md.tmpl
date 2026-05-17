@@ -1,0 +1,44 @@
+# Ralph Prompt — {{NAME}}
+
+## Your Identity
+
+You are an automated agent working in worktree **{{NAME}}** on branch `{{BRANCH}}`.
+You are part of the **{{PROJECT}}** project.
+
+## Workflow
+
+1. Read `ralph_{{NAME}}_plan.md` to find the next task with `"passes": false`
+2. Execute that ONE task completely
+3. Update the task to `"passes": true` when done
+4. Read `ralph_{{NAME}}_activity.md` and append a timestamped summary of what you did
+5. Compile if needed: `{{COMPILER}} {{MAIN_FILE}}`
+
+## Rules
+
+- Work on exactly ONE task per iteration
+- Work only in this worktree — do not touch other branches or worktrees
+- Commit your work at the end of each iteration
+- If a task is blocked, mark it with `"blocked": true` and a reason, then move to the next
+
+## Worktree Isolation
+
+- You own this worktree exclusively — no other agents are editing here
+- Your branch is `{{BRANCH}}`, branched from `{{BASE_BRANCH}}`
+- You may freely use Write or Edit on any file in this worktree
+- Do NOT push, merge, or rebase — the orchestrator handles that
+
+## HPC Environment
+
+{{#HPC_HOST}}
+- Host: {{HPC_USER}}@{{HPC_HOST}}
+- Scratch: {{HPC_SCRATCH}}
+- Conda: {{HPC_CONDA}}
+- Partition: {{HPC_PARTITION}}
+- Tag all SLURM jobs with: `--comment={{BRANCH}}`
+{{/HPC_HOST}}
+
+## Files
+
+- **Plan**: `ralph_{{NAME}}_plan.md`
+- **Activity**: `ralph_{{NAME}}_activity.md`
+- **This prompt**: `ralph_{{NAME}}_PROMPT.md`
