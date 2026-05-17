@@ -469,6 +469,17 @@ run_integrate() {
 
     cd "${PROJECT_DIR}"
 
+    # Stash any uncommitted changes so merges aren't blocked.
+    # This handles build artifacts (main.pdf), state files from other
+    # concurrent loops, or anything else dirtying the working tree.
+    if ! git diff --quiet HEAD 2>/dev/null || ! git diff --cached --quiet HEAD 2>/dev/null; then
+        echo "  stashing uncommitted changes before merge..." | tee -a "$LOG_FILE"
+        git stash push -u -m "${LOOP_NAME} pre-merge stash ${TIMESTAMP}" >> "$LOG_FILE" 2>&1 || true
+        STASHED=1
+    else
+        STASHED=0
+    fi
+
     # Install merge drivers if available
     local driver_script="${PROJECT_DIR}/ralph_merge_drivers.sh"
     if [ -f "$driver_script" ]; then
@@ -532,6 +543,14 @@ run_integrate() {
             echo "[WARN] ${#conflicts[@]} conflicts. No resolver script found." | tee -a "$LOG_FILE"
             echo "       Manual resolution required. See ${pending}" | tee -a "$LOG_FILE"
         fi
+    fi
+
+    # Restore stashed changes
+    if [ "$STASHED" -eq 1 ]; then
+        echo "  restoring stashed changes..." | tee -a "$LOG_FILE"
+        git stash pop >> "$LOG_FILE" 2>&1 || {
+            echo "  [WARN] stash pop had conflicts — stash preserved as ${LOOP_NAME} pre-merge stash" | tee -a "$LOG_FILE"
+        }
     fi
 }
 
