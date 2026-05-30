@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="assets/banner.png" alt="worktree-agent-loop banner" width="100%">
-</p>
-
-# wt — Git Worktree Orchestration for Multi-Agent Projects
+Git Worktree Orchestration for Multi-Agent Projects
 
 A toolkit for running multiple Claude Code agents in parallel on research manuscripts, each in its own git worktree. Born from the TARA-OMEN project's battle-tested "ralph loop" pattern.
 
