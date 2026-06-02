@@ -1,0 +1,30 @@
+# Example .p-ralph.yaml — a realistic manuscript-style config.
+# Shows how to wire p-ralph into a LaTeX writing project where each task
+# is a reviewer concern to address and the verify step is a compile.
+
+loop_id: reviewer-preempt
+tag_suffix: -baseline
+branch_prefix: "reviewer-preempt/task"
+
+plan_file:     "reviewer-preempt_plan.md"
+activity_file: "reviewer-preempt_activity.md"
+
+# Compile outputs — marked merge=ours so they never block merges.
+build_artifacts:
+  - main.pdf
+  - supplement.pdf
+
+max_parallel: 6
+worktree_dir: ".pralph-worktrees"
+
+claude:
+  binary: claude
+  model: claude-opus-4-6
+  extra_flags:
+    - --dangerously-skip-permissions
+  resolver_allowed_tools: "Read,Edit,Write,Bash(tectonic:*),Bash(git add:*),Bash(git commit:*),Bash(git status),Bash(git diff:*),Bash(ls:*),Glob,Grep"
+
+verify_cmd: "tectonic main.tex && tectonic supplement.tex"
+integrate_verify_cmd: "tectonic main.tex"
+
+prompt_template: "reviewer-preempt_PROMPT.md"

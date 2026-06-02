@@ -1,25 +1,43 @@
 # p-ralph
 
-**Parallel-worktree Ralph loops for Claude agents.**
+**Parallel-worktree extension of the Ralph Wiggum loop methodology.**
 
-p-ralph is a portable packaging of the Ralph Wiggum loop pattern — a way of
-driving long-horizon coding or writing tasks by letting one fresh Claude
-agent complete one small task per iteration, with plan state persisted to
-disk between iterations. This project generalizes that pattern to run
-**tasks in parallel** in isolated git worktrees, then merges the results
-back with custom merge drivers that understand plan/activity files.
+p-ralph implements [Geoffrey Huntley's Ralph Wiggum loop](https://ghuntley.com/ralph/)
+— a methodology for driving long-horizon coding or writing tasks by letting
+one fresh AI agent complete one small task per iteration, with plan state
+persisted to disk between iterations. This project extends that methodology
+to run **tasks in parallel** in isolated git worktrees, then merges the
+results back with custom merge drivers that understand plan/activity files.
 
 It's not a framework. It's a CLI (`p-ralph`) plus a set of templates and
 merge drivers that you drop into any git repository.
 
-## Origin
+## Methodology and attribution
 
-The Ralph loop idea is Geoff Huntley's. The parallel-worktree extension,
-the merge-driver machinery, and the build-artifact handling were developed
-during the ralph1–43 runs on the TARA-Oceans oceanographic manuscript, where
-dozens of Claude iterations wrote verifiable scientific text under a strict
-data-integrity policy. The legacy guides that inspired all of this live in
-`docs/legacy/` with attribution.
+**The Ralph Wiggum loop is Geoffrey Huntley's methodology.** The core
+concepts — one task per iteration, fresh context each time, plan file as
+persistent shared state, backpressure via tests/compilation, and the bash
+outer loop that restarts the agent — are all Huntley's design. Clayton
+Farr's [Ralph Playbook](https://github.com/ClaytonFarr/ralph-playbook)
+provides an excellent structured reference for the methodology.
+
+**What p-ralph adds** on top of Huntley's serial loop:
+
+- Parallel git worktrees — multiple tasks run simultaneously in isolated
+  branches off a shared baseline tag
+- Custom merge drivers for plan files (OR of `passes` flags) and activity
+  logs (section union by task id) so concurrent workers don't stomp each
+  other's state
+- Build-artifact handling (`merge=ours`) so verify-step outputs like
+  compiled PDFs don't block merges
+- An LLM-driven conflict resolver for real source-file overlaps between
+  parallel tasks
+- Per-task `--no-ff` merges so any single task can be reverted cleanly
+
+These additions were developed during the ralph1–43 runs on the TARA-Oceans
+oceanographic manuscript, where dozens of Claude iterations wrote verifiable
+scientific text under a strict data-integrity policy. The original reference
+material lives in `docs/legacy/` with attribution.
 
 ## When to use p-ralph
 

@@ -1,5 +1,6 @@
 #!/bin/bash
-# p-ralph — parallel-worktree Ralph loops for Claude agents.
+# p-ralph — parallel-worktree extension of Geoffrey Huntley's Ralph Wiggum
+# loop methodology (https://ghuntley.com/ralph/) for Claude agents.
 #
 # Subcommands:
 #   init <loop_id>   scaffold .p-ralph.yaml, <loop_id>_plan.md, <loop_id>_loop.sh

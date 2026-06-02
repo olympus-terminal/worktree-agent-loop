@@ -19,8 +19,7 @@ import json
 import sys
 
 
-SCALAR_FIELDS = ("description", "reviewer_concern", "category", "priority",
-                 "notes", "subject")
+RESERVED_KEYS = {"id", "passes"}
 
 
 def load(path):
@@ -39,8 +38,10 @@ def merge(a, b):
             bool(by_id[tid].get("passes", False))
             or bool(t.get("passes", False))
         )
-        for k in SCALAR_FIELDS:
-            if k in t and t[k] and t[k] != by_id[tid].get(k):
+        for k in t:
+            if k in RESERVED_KEYS:
+                continue
+            if t[k] and t[k] != by_id[tid].get(k):
                 by_id[tid][k] = t[k]
 
     order_a = [t["id"] for t in a]

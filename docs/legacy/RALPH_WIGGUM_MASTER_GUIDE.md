@@ -1,8 +1,19 @@
 # Ralph Wiggum Master Guide: TARA-Oceans Marine Metagenome Manuscript
 
+> **Methodology credit:** This guide applies [Geoffrey Huntley's Ralph
+> Wiggum loop methodology](https://ghuntley.com/ralph/) to a specific
+> scientific manuscript project. The loop pattern, plan-file state model,
+> and single-task-per-iteration design are Huntley's. See
+> [ClaytonFarr/ralph-playbook](https://github.com/ClaytonFarr/ralph-playbook)
+> for the general methodology reference.
+>
+> **Scope:** This is a project-specific guide for the TARA-Oceans
+> manuscript, not a general p-ralph reference. It contains hardcoded paths,
+> biology-specific details, and project-specific policies.
+
 ## Overview
 
-This guide enables an autonomous agent to execute Ralph Wiggum loops for preparing the **master TARA-Oceans manuscript** - a comprehensive analysis linking marine metagenome protein domains to environmental conditions via satellite embeddings.
+This guide applies Huntley's Ralph Wiggum loop methodology to prepare the **master TARA-Oceans manuscript** - a comprehensive analysis linking marine metagenome protein domains to environmental conditions via satellite embeddings.
 
 **Scope:** Full global dataset (TARA Oceans, OSD, Malaspina, GOS, MMETSP) - approximately twice the data of the AlphaEarth coastal analysis.
 
