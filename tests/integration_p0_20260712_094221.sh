@@ -262,6 +262,8 @@ pass "reset refuses worktree paths outside the repository"
 
 # A repository with no main branch must integrate and report against its target.
 repo=$(make_repo target_branch trunk 'test -f result.txt' 'test -f result.txt')
+mkdir -p "$repo/.git/info"
+printf '*.custom merge=custom\n' > "$repo/.git/info/attributes"
 (
     cd "$repo"
     FAKE_AGENT_MODE=success FAKE_ARGS_LOG="$TMP_ROOT/target_branch.args" FAKE_TARGET_REPO="$repo" \
@@ -281,6 +283,20 @@ grep -q 'running verify: test -f result.txt' "$repo"/testloop_logs/task1_*.log |
 grep -q '^target:   trunk$' "$TMP_ROOT/target_branch.status" || fail "status did not identify trunk target"
 grep -q 'ahead of trunk, merged' "$TMP_ROOT/target_branch.status" || fail "status used the wrong comparison branch"
 pass "current non-main target branch is used consistently"
+
+# Merge-driver installation must preserve unrelated local attributes and remain
+# idempotent when it refreshes its own managed block.
+grep -Fxq '*.custom merge=custom' "$repo/.git/info/attributes" || fail "merge-driver install deleted an existing attribute"
+(
+    cd "$repo"
+    bash "$SOURCE_ROOT/lib/install_merge_drivers.sh" \
+        testloop_plan.md testloop_activity.md >/dev/null
+)
+grep -Fxq '*.custom merge=custom' "$repo/.git/info/attributes" || fail "merge-driver reinstall deleted an existing attribute"
+[ "$(grep -Fxc '# BEGIN p-ralph managed merge attributes' "$repo/.git/info/attributes")" -eq 1 ] || fail "merge-driver reinstall duplicated its managed block"
+grep -Eq '^testloop_plan\.md[[:space:]]+merge=pralphplan$' "$repo/.git/info/attributes" || fail "plan merge attribute missing"
+grep -Eq '^testloop_activity\.md[[:space:]]+merge=pralphactivity$' "$repo/.git/info/attributes" || fail "activity merge attribute missing"
+pass "merge-driver install preserves existing attributes and is idempotent"
 
 # Safe defaults and canonical installation instructions must remain regression-tested.
 for file in \

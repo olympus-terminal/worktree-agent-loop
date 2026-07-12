@@ -45,13 +45,53 @@ git config merge.pralphactivity.driver "${ACTIVITY_DRIVER} %O %A %B"
 
 mkdir -p .git/info
 ATTR_FILE=".git/info/attributes"
+
+# Keep p-ralph's rules in a replaceable block so repeated installs can update
+# them without deleting attributes configured by the repository owner or other
+# tools. Write to a sibling temporary file and rename it only after the
+# existing file has been parsed successfully.
+ATTR_BEGIN="# BEGIN p-ralph managed merge attributes"
+ATTR_END="# END p-ralph managed merge attributes"
+ATTR_TMP=$(mktemp "${ATTR_FILE}.p-ralph.XXXXXX")
+trap 'rm -f -- "$ATTR_TMP"' EXIT
+
+if [ -f "$ATTR_FILE" ]; then
+    if ! awk -v begin="$ATTR_BEGIN" -v end="$ATTR_END" '
+        $0 == begin {
+            if (managed) exit 2
+            managed = 1
+            next
+        }
+        $0 == end {
+            if (!managed) exit 3
+            managed = 0
+            next
+        }
+        !managed { print }
+        END {
+            if (managed) exit 4
+        }
+    ' "$ATTR_FILE" > "$ATTR_TMP"; then
+        echo "error: malformed p-ralph block in ${ATTR_FILE}; file left unchanged" >&2
+        exit 1
+    fi
+fi
+
+if [ -s "$ATTR_TMP" ] && [ -n "$(tail -n 1 "$ATTR_TMP")" ]; then
+    printf '\n' >> "$ATTR_TMP"
+fi
 {
-    echo "${PLAN_FILE}     merge=pralphplan"
-    echo "${ACTIVITY_FILE} merge=pralphactivity"
+    printf '%s\n' "$ATTR_BEGIN"
+    printf '%s     merge=pralphplan\n' "$PLAN_FILE"
+    printf '%s merge=pralphactivity\n' "$ACTIVITY_FILE"
     for a in "${BUILD_ARTIFACTS[@]}"; do
-        echo "${a} merge=ours"
+        printf '%s merge=ours\n' "$a"
     done
-} > "$ATTR_FILE"
+    printf '%s\n' "$ATTR_END"
+} >> "$ATTR_TMP"
+
+mv -- "$ATTR_TMP" "$ATTR_FILE"
+trap - EXIT
 
 echo "[p-ralph] merge drivers installed:"
 echo "  plan:     ${PLAN_FILE} → pralphplan"
