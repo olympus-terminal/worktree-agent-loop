@@ -1,3 +1,10 @@
+WARNING — OUTDATED, UNSAFE COMMANDS: This archived snapshot contains
+permission-bypass examples and other historical commands that are not current
+p-ralph guidance. Do not execute commands from this file. Use ../../README.md
+and ../overview.md for the maintained, safe-default workflow.
+
+-------------------------------------------------------------------------------
+
 Skip to content
 ghuntley
 how-to-ralph-wiggum
@@ -1058,4 +1065,3 @@ Report repository
 Releases
 No releases published
 Sponsor this project
-

@@ -68,10 +68,10 @@ ordered deterministically so the merge is stable.
 ### 3. Build artifacts as `merge=ours`
 
 `main.pdf` and any other verify-step output is registered in
-`.git/info/attributes` as `merge=ours`, which makes git take the `main`
-side unconditionally and never even attempt a three-way merge. We also
-stash the working-tree copy before the merge phase starts, so the merge
-sees a clean tree.
+`.git/info/attributes` as `merge=ours`, which makes git take the target
+branch's side unconditionally and never even attempt a three-way merge. The
+runner refuses to start unless the target worktree is clean, so integration
+never hides user edits in an unattended stash.
 
 ### 4. Conflict resolver as a fallback, not a first resort
 
@@ -94,13 +94,13 @@ reset` — those were the silent failure modes in the original bug.
 
 ## The p-ralph invariants that came out of this
 
-1. Never write plan/activity files in `main` from the wrapper — only from
+1. Never write plan/activity files in the target branch from the wrapper — only from
    inside task branches.
-2. Never run the verify step inside `main` *during* integrate; run it in a
+2. Never run the verify step inside the target *during* integrate; run it in a
    worktree or after all merges are done.
 3. Always install the merge drivers before the first merge, not after a
    conflict. The drivers are idempotent; reinstalling is free.
-4. Always stash (don't clean, don't reset) any untracked or modified files
-   in `main` before merging. The user's in-progress work may be there.
+4. Refuse to start when the target has staged, unstaged, or untracked changes.
+   Never move the user's in-progress work into an unattended stash.
 5. When a conflict resolver runs, it must complete the merge or fail
    loudly. Silent `git merge --abort` is banned.

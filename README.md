@@ -59,22 +59,23 @@ more conflicts than it saves iterations.
 Each p-ralph run executes five phases in order:
 
 1. **Plan** — read tasks from `<loop>_plan.md`; select the pending set.
-2. **Branch** — create a `<loop>-baseline` tag on `main`, then one
+2. **Branch** — create a `<loop>-baseline` tag on the current target branch, then one
    `<loop>/task<N>` worktree+branch per pending task off that tag.
 3. **Work** — spawn one Claude iteration per worktree in parallel, each
    handed the task-scoped prompt. On success each writes a `<promise>COMPLETE</promise>`
-   signal, commits its work, and updates plan/activity files in its branch.
-4. **Integrate** — stash build artifacts in `main`, install custom merge
-   drivers, `git merge --no-ff` each task branch into `main`. Real source
+   signal, commits its work, updates plan/activity files in its branch, and
+   must pass the configured per-task verification command.
+4. **Integrate** — install custom merge drivers, then `git merge --no-ff`
+   each successful task branch into the target branch. Real source
    conflicts are handed to a one-off Claude conflict-resolver invocation.
-5. **Verify** — run the configured verify command on the merged `main`. If
+5. **Verify** — run the configured verify command on the merged target branch. If
    it fails, the most recent merge is flagged for review but not auto-reverted.
 
 ## Install
 
 ```bash
-git clone https://github.com/olympus-terminal/p-ralph.git
-cd p-ralph
+git clone https://github.com/olympus-terminal/worktree-agent-loop.git
+cd worktree-agent-loop
 ./install.sh   # symlinks bin/p-ralph into ~/.local/bin
 ```
 
@@ -84,10 +85,16 @@ cd p-ralph
 cd /path/to/your/repo
 p-ralph init my-loop           # writes .p-ralph.yaml and my-loop_plan.md
 $EDITOR my-loop_plan.md        # fill in the tasks
-p-ralph build my-loop          # run all pending tasks in parallel worktrees
-p-ralph status my-loop         # see what's merged, what's pending
-p-ralph revert my-loop 7       # revert task 7's merge commit, keep the rest
+git add .p-ralph.yaml my-loop_* # the target worktree must be clean
+git commit -m "Configure my-loop"
+p-ralph build                  # run all pending tasks in parallel worktrees
+p-ralph status                 # see what's merged, what's pending
+p-ralph revert 7               # revert task 7's merge commit, keep the rest
 ```
+
+`p-ralph build` operates on the currently checked-out branch and refuses to
+start from a dirty worktree, including one with untracked files. Add the
+configured worktree and log directories to your project's ignore rules.
 
 ## Documentation
 

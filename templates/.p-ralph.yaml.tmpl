@@ -40,10 +40,9 @@ worktree_dir: ".pralph-worktrees"
 claude:
   binary: claude
   model: claude-opus-4-6
-  # Permission flags. The loop's worker prompt should already be
-  # tightly scoped; these flags control what the wrapper allows.
-  extra_flags:
-    - --dangerously-skip-permissions
+  # Optional worker flags. Safe defaults do not bypass interactive permission
+  # controls; add flags only after reviewing their security implications.
+  extra_flags: []
   # Allowlist for the conflict resolver (stricter than the worker).
   resolver_allowed_tools: "Read,Edit,Write,Bash(git add:*),Bash(git commit:*),Bash(git status),Bash(git diff:*),Glob,Grep"
 
@@ -54,7 +53,7 @@ claude:
 # Runs inside the task worktree. Non-zero exit → iteration fails.
 verify_cmd: "echo 'replace me — e.g., pytest -x, tectonic main.tex, cargo test'"
 
-# Additional verify command run in `main` after all merges land. Leave
+# Additional verify command run in the target branch after all merges land. Leave
 # empty to reuse verify_cmd.
 integrate_verify_cmd: ""
 

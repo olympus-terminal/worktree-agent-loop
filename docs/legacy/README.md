@@ -1,5 +1,10 @@
 # Legacy reference material
 
+> [!CAUTION]
+> These archived files contain outdated permission-bypass examples and
+> project-specific commands. Do not execute them. Current safe-default usage
+> is documented in the repository `README.md` and `docs/overview.md`.
+
 These files document the origins of the Ralph Wiggum loop methodology and
 one project-specific adaptation. They are retained for attribution and so
 that future p-ralph contributors can trace the methodology chain.

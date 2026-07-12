@@ -1,5 +1,11 @@
 # Ralph Wiggum Master Guide: TARA-Oceans Marine Metagenome Manuscript
 
+> [!CAUTION]
+> **Outdated and unsafe commands:** This archived project-specific guide
+> contains permission-bypass examples and hardcoded operational commands.
+> Do not execute them. Use the repository `README.md` and `docs/overview.md`
+> for the maintained, safe-default p-ralph workflow.
+
 > **Methodology credit:** This guide applies [Geoffrey Huntley's Ralph
 > Wiggum loop methodology](https://ghuntley.com/ralph/) to a specific
 > scientific manuscript project. The loop pattern, plan-file state model,

@@ -17,8 +17,7 @@ worktree_dir: ".pralph-worktrees"
 claude:
   binary: claude
   model: claude-opus-4-6
-  extra_flags:
-    - --dangerously-skip-permissions
+  extra_flags: []
   resolver_allowed_tools: "Read,Edit,Write,Bash(pytest:*),Bash(git add:*),Bash(git commit:*),Bash(git status),Bash(git diff:*),Bash(ls:*),Glob,Grep"
 
 verify_cmd: "pytest -x --no-header -q"

@@ -135,9 +135,8 @@ cmd_build() {
         echo "error: ${SCRIPT} missing or not executable" >&2
         exit 2
     fi
-    # Make the lib dir discoverable by the loop script.
-    ln -sfn "$PRALPH_LIB" "${REPO_ROOT}/.pralph-lib"
-    bash "$SCRIPT"
+    # Pass the shared library path without creating an untracked repo symlink.
+    PRALPH_LIB="$PRALPH_LIB" bash "$SCRIPT"
 }
 
 cmd_status() {
@@ -146,18 +145,27 @@ cmd_status() {
     BRANCH_PREFIX=$(read_cfg branch_prefix)
     TAG_SUFFIX=$(read_cfg tag_suffix)
     BASELINE="${LOOP_ID}${TAG_SUFFIX}"
+    TARGET_BRANCH=$(git branch --show-current)
+    if [ -z "$TARGET_BRANCH" ]; then
+        echo "error: p-ralph status requires a checked-out target branch" >&2
+        exit 2
+    fi
 
     echo "loop:     ${LOOP_ID}"
     echo "baseline: ${BASELINE}"
+    echo "target:   ${TARGET_BRANCH}"
     echo ""
     echo "branches:"
-    git branch --list "${BRANCH_PREFIX}*" | while read -r line; do
-        b=$(echo "$line" | sed 's/^[* ] //')
+    while read -r b; do
         [ -z "$b" ] && continue
-        ahead=$(git rev-list --count "main..${b}" 2>/dev/null || echo "?")
-        merged=$(git branch --merged main | grep -q " ${b}$" && echo "merged" || echo "unmerged")
-        printf "  %-40s  %s ahead of main, %s\n" "$b" "$ahead" "$merged"
-    done
+        ahead=$(git rev-list --count "${TARGET_BRANCH}..${b}" 2>/dev/null || echo "?")
+        if git branch --merged "$TARGET_BRANCH" --format='%(refname:short)' | grep -Fxq "$b"; then
+            merged="merged"
+        else
+            merged="unmerged"
+        fi
+        printf "  %-40s  %s ahead of %s, %s\n" "$b" "$ahead" "$TARGET_BRANCH" "$merged"
+    done < <(git for-each-ref --format='%(refname:short)' "refs/heads/${BRANCH_PREFIX}*")
     echo ""
     cmd_plan
 }
@@ -184,17 +192,45 @@ cmd_reset() {
     TAG_SUFFIX=$(read_cfg tag_suffix)
     WORKTREE_DIR=$(read_cfg worktree_dir)
 
+    if ! WORKTREE_PATH=$(python3 - "$REPO_ROOT" "$WORKTREE_DIR" <<'PYEOF'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1]).resolve()
+raw = sys.argv[2]
+if not raw:
+    sys.stderr.write("error: worktree_dir must be a nonempty relative path\n")
+    raise SystemExit(2)
+configured = Path(raw)
+if configured.is_absolute():
+    sys.stderr.write("error: worktree_dir must be relative to the repository root\n")
+    raise SystemExit(2)
+target = (root / configured).resolve(strict=False)
+try:
+    target.relative_to(root)
+except ValueError:
+    sys.stderr.write("error: worktree_dir resolves outside the repository root\n")
+    raise SystemExit(2)
+if target == root:
+    sys.stderr.write("error: worktree_dir must not resolve to the repository root\n")
+    raise SystemExit(2)
+print(target)
+PYEOF
+    ); then
+        exit 2
+    fi
+
     echo "This will delete:"
     echo "  - baseline tag: ${LOOP_ID}${TAG_SUFFIX}"
     echo "  - all branches matching: ${BRANCH_PREFIX}*"
-    echo "  - all worktrees under: ${WORKTREE_DIR}/"
+    echo "  - all worktrees under: ${WORKTREE_PATH}/"
     echo ""
     read -r -p "proceed? (yes/NO) " ans
     [ "$ans" = "yes" ] || { echo "aborted"; exit 0; }
 
     git branch --list "${BRANCH_PREFIX}*" | sed 's/^[* ] //' | xargs -r -n1 git branch -D
     git tag -d "${LOOP_ID}${TAG_SUFFIX}" 2>/dev/null || true
-    rm -rf "${REPO_ROOT}/${WORKTREE_DIR}"
+    rm -rf -- "$WORKTREE_PATH"
     git worktree prune
     echo "reset complete"
 }

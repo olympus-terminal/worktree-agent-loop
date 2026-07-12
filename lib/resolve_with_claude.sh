@@ -93,7 +93,6 @@ ${UNMERGED}
 PROMPTEOF
 
 "$CLAUDE_BIN" --model "$CLAUDE_MODEL" \
-    --dangerously-skip-permissions \
     -p "$(cat "$PROMPT")" \
     --output-format text \
     --allowedTools "$ALLOWED" || true

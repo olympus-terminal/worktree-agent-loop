@@ -16,7 +16,7 @@ bash loop restarts immediately with a clean context window. The plan file on
 disk is the only shared state between iterations.
 
 ```
-while :; do cat PROMPT.md | claude -p --dangerously-skip-permissions ; done
+while :; do cat PROMPT.md | claude -p ; done
 ```
 
 That's the entire orchestrator. Everything else — task selection, implementation,
@@ -30,14 +30,14 @@ Huntley's pattern: one agent, one task, fresh context, plan as state.
 ## The five phases (p-ralph specific)
 
 1. **Plan** — read `<loop>_plan.md`, identify tasks where `passes: false`
-2. **Branch** — tag current `main` as baseline, create one worktree+branch
+2. **Branch** — tag the current target branch as baseline, create one worktree+branch
    per pending task off that tag
 3. **Work** — spawn one Claude agent per worktree in parallel (up to
    `max_parallel`), each receiving a task-scoped prompt
-4. **Integrate** — merge each task branch into `main` with `--no-ff`, using
+4. **Integrate** — merge each successful task branch into the target with `--no-ff`, using
    custom merge drivers for plan/activity files and an LLM conflict
    resolver for real source overlaps
-5. **Verify** — run `integrate_verify_cmd` on the merged result
+5. **Verify** — run `integrate_verify_cmd` on the merged target
 
 ## Setting up a new project
 
@@ -54,6 +54,10 @@ This creates four files:
 - `my-loop_activity.md` — completion log
 - `my-loop_loop.sh` — the loop runner script
 
+Commit the generated files and your prompt before building. The runner refuses
+to modify a target worktree containing staged, unstaged, or untracked changes.
+Add `.pralph-worktrees/` and `<loop>_logs/` to the project's ignore rules.
+
 ### 2. Configure `.p-ralph.yaml`
 
 The critical settings:
@@ -67,9 +71,10 @@ max_parallel: 4                            # tune to your API rate limit and CPU
 ```
 
 `verify_cmd` is your backpressure — the gate that prevents bad work from
-landing. It runs inside each task's worktree after the agent finishes, and
-again on merged `main` after integration. If it exits non-zero, the task
-fails. Good verify commands: `pytest`, `tectonic main.tex`, `cargo test`,
+landing. It runs inside each task's worktree after the agent finishes. The
+configured `integrate_verify_cmd` then runs on the merged target (or reuses
+`verify_cmd` when empty). If either exits non-zero, the run fails. Good verify
+commands: `pytest`, `tectonic main.tex`, `cargo test`,
 `npm test`, a custom validation script.
 
 ### 3. Write the plan file
@@ -222,20 +227,19 @@ version when both sides have an entry for the same task.
 
 ## The `<promise>COMPLETE</promise>` signal
 
-The agent outputs this string when it's done. The loop runner checks for it
-to confirm the agent believes it finished successfully. This is a convention
-from Huntley's methodology — it gives the outer loop a reliable signal
-distinct from normal agent output.
+The prompt asks the agent to output this string when it believes it is done.
+The runner requires the exact marker in the task log after a successful agent
+exit and before verification. A missing marker fails that worker and prevents
+integration, alongside the process-status and verification gates.
 
 ## Security
 
-p-ralph runs agents with `--dangerously-skip-permissions` by default,
-because interactive approval prompts would break the unattended loop. This
-means the agent has full access to everything on your machine.
+p-ralph does not enable permission-bypass flags by default. Any optional
+worker flags are explicit configuration and should be reviewed before an
+unattended run.
 
-Huntley's guidance: "It's not if it gets popped, it's when. And what is the
-blast radius?" Run in sandboxed environments with minimum viable access —
-only the API keys and deploy keys the task needs.
+Run in sandboxed environments with minimum viable access and expose only the
+credentials and resources each task needs.
 
 ## Conflict resolution
 
